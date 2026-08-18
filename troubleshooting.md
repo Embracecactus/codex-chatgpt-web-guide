@@ -48,7 +48,9 @@ DISPLAY=:0 xlsclients
 
 | 现象 | 根因 | 解法 |
 |------|------|------|
-| 模型说 "Browser-only mode",无法访问本地工作区 | bridge 在启动器启动时读了旧的 `browser` mode;或当前 Codex 会话是旧任务根,无法迁移 | ① 重启启动器 GUI(让 bridge 重读 `mode:"full"`);② 退出 Codex CLI 开**全新会话**,不要在同会话切模型 |
+| 模型说 "Browser-only mode",无法访问本地工作区 | bridge 在启动器启动时读了旧的 `browser` mode;或当前 Codex 会话是旧任务根,无法迁移 | ① 重启启动器 GUI(让 bridge 重读 `mode:"full"`);② 在 ChatGPT Web 开**全新对话**并打开 `Codex Native2` 开关(见 `docs/full-harness.md` 步骤 5),不要在同对话切模型 |
+| bridge 是 200,但模型仍 Browser-only,且 tunnel 日志**无 `codex_exec`** | `Codex Native2` 连接器没在这个对话里打开开关(建好 ≠ 启用;开关 per-chat) | 在 ChatGPT Web 新对话的输入框/模型选择器里把 `Codex Native2` 开关切到**开**;换对话要重开。这是和 502 最容易混淆的坑,区分点:502 时端口通但上游断,此处端口 200 却从未调用本地工具 |
+| 用 `codex -m "chatgpt-web/pro"` 一直 Browser-only | 该路径是远程模型集成,**无法替你打开 per-chat 连接器开关** | harness 要在 **ChatGPT Web UI** 里驱动:开新对话 → 开 `Codex Native2` 开关 → 发指令。CLI 集成本身到不了本地工具 |
 | 读取被"运行环境的安全检查拦截 / 当前会话没有可用权限访问这个路径" | 连接器权限是 “Allow low-risk actions”,自动拦截本地读写 | ChatGPT Web 里把 `Codex Native2` 权限改为 **Allow all actions** |
 | 即使 Allow all actions,读 `~/.codex`、`~/.ssh` 等仍被拒 | 本地 Codex harness 沙箱保护工作区外敏感目录 | 用普通工作区文件路径验证(如项目目录下的文件),避开敏感路径 |
 | 重启启动器后 bridge 起不来 / 端口 17841 被旧进程占着 | 只杀了 AppImage 包装名,真正的 `codex-web-gpt-launcher` 进程还活着 | 杀进程匹配 `codex-web-gpt-launcher`(在 `/tmp/appimage_extracted_*/` 下);必要时杀掉占用 17841 的孤儿 bun 进程再重启 |

@@ -39,6 +39,11 @@
 ### 4. 验证
 回启动器点 **Verify runtime**。它会精确选择 `Codex Native2`;若只发现旧的 `Codex Native`,会显式失败并提示迁移,而不会接受旧连接器。
 
+### 5. 在每个新对话里"打开"连接器开关(最容易漏的一步)
+连接器**建好 ≠ 生效**。在 ChatGPT Web 里,每个新对话默认不挂载任何连接器,必须手动开启:
+- 新对话的输入框附近 / 模型选择器里,找到 **连接器 / 工具开关**,把 **`Codex Native2`** 切到 **开**。
+- 没开这个开关,模型在这一对话里就是 **Browser-only**,会提示 *"Prepare the local context with a tool-capable ChatGPT Web model first"* 或 *"cannot access the local Codex computer"*,且 tunnel 日志里**看不到任何 `codex_exec`**(本地工具从未被调用)。
+
 ---
 
 ## 重要提醒
@@ -46,6 +51,7 @@
 - **不要**动旧的 `Codex Native` 连接器(别重命名、别刷新)。按本篇新建独立的 `Codex Native2`。
 - 外层 Codex harness 仍强制执行其沙箱与审批策略。
 - 启动器 GUI 必须保持运行(tunnel 客户端随启动器常驻),否则连接器不可用。
+- **harness 是在 ChatGPT Web 里驱动的连接器能力,不是 Codex CLI 的能力。** `codex -m "chatgpt-web/pro"` 只是把提示词经 bridge 转发给 ChatGPT Web 的"远程模型集成",它**无法替你打开 per-chat 的连接器开关**,因此该路径通常停留在 Browser-only。要用本地工具,请在 **ChatGPT Web UI** 里开新对话、打开 `Codex Native2` 开关、再发指令(见步骤 5)。
 
 ---
 
@@ -81,7 +87,7 @@ bridge 在**启动器进程启动时**才读取一次 `mode`(browser/full),之�
 
 **⑥ 即使 harness 健康,会话仍可能 Browser-only:需先"准备本地上下文"**
 若启动器/bridge/tunnel 都正常(`mode:"full"`),但模型仍报 Browser-only 并提示 *"Prepare the local context with a tool-capable ChatGPT Web model first, then switch back"*,这是**会话级**问题:surface(本地工具面)要先被准备,高阶档位默认不自带。
-- 必须**彻底退出 Codex CLI 再开全新会话**(同会话切模型不会重新生根,且会丢掉已建立的 surface);
+- 必须**在 ChatGPT Web 开一个全新对话(且已按步骤 5 打开 `Codex Native2` 开关)**;同对话切模型不会重新生根,且会丢掉已建立的 surface;
 - 新会话的**第一条消息就做一次本地读取**(如读一个普通文件),把上下文填满工具结果,surface 即建立;
 - **会话内不要切换模型**:切到 `pro` / `pro ultra` 等高阶档位会丢失 surface,Pro 在上下文准备好之前就是 browser-only;
 - 验证:新会话首条读文件成功 = surface 已建立,之后即可评审本地代码。
@@ -93,3 +99,8 @@ bridge 在**启动器进程启动时**才读取一次 `mode`(browser/full),之�
 - **只看 TCP 端口通不通会误判健康**:端口通也可能 502。必须查 HTTP 状态码:`curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:17841/v1/models`,**200 才健康,502 即断**。
 - 修复:去 GUI 窗口**重新登录 ChatGPT Web**(若 cookie 仍有效可能自动重连);仍不行就重启启动器 GUI(它会重建 bridge 与 tunnel)。登录/重连后 502 变 200,CLI 侧即可脱离 Browser-only。
 - 实测印证:本次排错时 tunnel 在 19:48–19:58 还在正常转发 `codex_exec`/`codex_write_stdin`,但桥一直 502,说明基础设施全好,只差 GUI 会话这一步。
+
+**⑧ 连接器建好了,对话里还是 Browser-only:忘开 per-chat 开关**
+最常见、也最容易被当成"harness 没通"的坑:你在 ChatGPT Web 建了 `Codex Native2`、权限也 Allow all actions,但**新对话里没打开它的开关**。结果模型这一轮说"cannot access the local Codex computer / Prepare the local context with a tool-capable ChatGPT Web model first",而 tunnel 日志里**完全没有 `codex_exec`**——本地工具根本没被调用。
+- 解法:见步骤 5,在输入框附近/模型选择器里把 `Codex Native2` 开关切到**开**,再发指令。开关是**每个对话独立**的,换对话要重新开。
+- 区分:若 bridge 是 502,那是 GUI 会话掉线(坑 ⑦);若 bridge 是 200 却仍 Browser-only 且无 `codex_exec`,就是本坑(连接器没开)。两者现象相似,但根因不同。
