@@ -87,3 +87,9 @@ bridge 在**启动器进程启动时**才读取一次 `mode`(browser/full),之�
 - 验证:新会话首条读文件成功 = surface 已建立,之后即可评审本地代码。
 - **首条消息必须是"具体本地读取",不要直接发评审类请求**:若第一条就是"评审某某目录",模型在上下文未准备、尚不能用工具时会回退成 Browser-only 并提示准备上下文;应先发一条简单的"读取某文件前 N 行",等它真正读出来(surface 建立),再发评审请求。
 - **相对路径以 Codex 会话目录(cwd)为基准**:模型读 `a/b/c` 时解析为会话启动时的 cwd 下的 `a/b/c`。给绝对路径最稳妥(如 `/home/你/project/...`)。
+
+**⑦ 桥 17841 返回 502:GUI 里的 ChatGPT 会话掉线了(最容易误判)**
+即使启动器进程在跑、GUI 窗口也开着、tunnel 还健康,只要 bridge `/v1/models` 返回 **502**(端口占用但上游断),Codex CLI 侧就会退化成 Browser-only。根因是 launcher 内部那个已登录的 ChatGPT Web 会话掉线了(登录过期、代理闪断、页面失连等),与 `mode`、tunnel、连接器权限都无关。
+- **只看 TCP 端口通不通会误判健康**:端口通也可能 502。必须查 HTTP 状态码:`curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:17841/v1/models`,**200 才健康,502 即断**。
+- 修复:去 GUI 窗口**重新登录 ChatGPT Web**(若 cookie 仍有效可能自动重连);仍不行就重启启动器 GUI(它会重建 bridge 与 tunnel)。登录/重连后 502 变 200,CLI 侧即可脱离 Browser-only。
+- 实测印证:本次排错时 tunnel 在 19:48–19:58 还在正常转发 `codex_exec`/`codex_write_stdin`,但桥一直 502,说明基础设施全好,只差 GUI 会话这一步。

@@ -25,6 +25,9 @@ pgrep -fa "Codex Web GPT.AppImage"
 # 2) bridge 端口通不通(应显示 REACHABLE)
 timeout 3 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/17841' && echo REACHABLE || echo DOWN
 
+# 2b) bridge 是否真正健康:必须返回 HTTP 200,502=GUI 内 ChatGPT 会话掉线(端口通也会 502,只看端口会误判)
+curl -s -o /dev/null -w "bridge HTTP %{http_code}\n" http://127.0.0.1:17841/v1/models
+
 # 3) 代理端口通不通(应显示 REACHABLE)
 timeout 3 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/7897' && echo REACHABLE || echo DOWN
 
@@ -51,6 +54,7 @@ DISPLAY=:0 xlsclients
 | 重启启动器后 bridge 起不来 / 端口 17841 被旧进程占着 | 只杀了 AppImage 包装名,真正的 `codex-web-gpt-launcher` 进程还活着 | 杀进程匹配 `codex-web-gpt-launcher`(在 `/tmp/appimage_extracted_*/` 下);必要时杀掉占用 17841 的孤儿 bun 进程再重启 |
 | 模型提示 "Prepare the local context with a tool-capable ChatGPT Web model first" / 仍 Browser-only 但 harness 健康 | surface 是会话级,需先准备;且**首条消息不能直接是评审请求**(模型在没工具时会回退 browser-only) | 彻底退出 CLI 开新会话;**首条消息发一个具体本地读取**(如读 README 前 30 行)建立 surface,成功后再发评审请求;会话内不要切模型 |
 | 给的路径找不到 / 模型说读不到 | 给的是相对路径,且相对的是 Codex 会话 cwd,或路径本就不对 | 用**绝对路径**最稳;确认会话启动目录(cwd),相对路径以 cwd 为基准 |
+| 启动器在跑、GUI 窗口也开着,但桥 17841 返回 **502**(端口通却上游断) | launcher 内部到 ChatGPT Web 的**已登录会话掉线**(登录过期 / 代理闪断 / 页面失连),bridge 代理拿不到上游。注意:tunnel 健康与否和这无关(走的是另一条路) | GUI 里**重新登录 ChatGPT Web**(cookie 有效可能自动重连);仍不行就重启启动器 GUI 让它重连。登录后 502→200,CLI 侧即可脱离 Browser-only。验证:`curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:17841/v1/models` 必须返回 200 |
 
 ## Windows / Linux(待验证,记录已知差异)
 
