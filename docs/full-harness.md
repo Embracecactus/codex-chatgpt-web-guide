@@ -94,13 +94,13 @@ bridge 在**启动器进程启动时**才读取一次 `mode`(browser/full),之�
 - **首条消息必须是"具体本地读取",不要直接发评审类请求**:若第一条就是"评审某某目录",模型在上下文未准备、尚不能用工具时会回退成 Browser-only 并提示准备上下文;应先发一条简单的"读取某文件前 N 行",等它真正读出来(surface 建立),再发评审请求。
 - **相对路径以 Codex 会话目录(cwd)为基准**:模型读 `a/b/c` 时解析为会话启动时的 cwd 下的 `a/b/c`。给绝对路径最稳妥(如 `/home/你/project/...`)。
 
-**⑦ 桥 17841 返回 502:GUI 里的 ChatGPT 会话掉线了(最容易误判)**
-即使启动器进程在跑、GUI 窗口也开着、tunnel 还健康,只要 bridge `/v1/models` 返回 **502**(端口占用但上游断),Codex CLI 侧就会退化成 Browser-only。根因是 launcher 内部那个已登录的 ChatGPT Web 会话掉线了(登录过期、代理闪断、页面失连等),与 `mode`、tunnel、连接器权限都无关。
-- **只看 TCP 端口通不通会误判健康**:端口通也可能 502。必须查 HTTP 状态码:`curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:17841/v1/models`,**200 才健康,502 即断**。
-- 修复:去 GUI 窗口**重新登录 ChatGPT Web**(若 cookie 仍有效可能自动重连);仍不行就重启启动器 GUI(它会重建 bridge 与 tunnel)。登录/重连后 502 变 200,CLI 侧即可脱离 Browser-only。
-- 实测印证:本次排错时 tunnel 在 19:48–19:58 还在正常转发 `codex_exec`/`codex_write_stdin`,但桥一直 502,说明基础设施全好,只差 GUI 会话这一步。
+**⑦ 桥 17841 的 502:先分清"假阴性"还是"真掉线"(最容易误判)**
+**⚠ 头号陷阱**:bridge 要求 Bearer 鉴权,**任何不带 `Authorization: Bearer ...` 的请求都返回 502**,body 是 `Native Codex passthrough requires the incoming Bearer authorization`。所以你用裸 `curl http://127.0.0.1:17841/v1/models` 看到 502,**百分之百是假阴性,不代表 bridge 坏了 / GUI 会话掉了**。绝大多数"502"都是这么来的,别被它骗去反复重登 ChatGPT。
+- **真正的健康判据**:用 Codex CLI 自己的 Bearer + `client_version` 打桥(脚本见 `troubleshooting.md` 的 `2b` 自检)。返回 **200** = bridge 健康、surface 已挂载(passthrough 正常);**只有带 token 的请求仍然 502**,才是 launcher 内部那个已登录的 ChatGPT Web 会话真的掉线了(登录过期 / 代理闪断 / 页面失连),与 `mode`、tunnel、连接器权限都无关。
+- 修复(仅限"带 token 仍 502"的场景):去 GUI 窗口**重新登录 ChatGPT Web**(cookie 有效可能自动重连);仍不行就重启启动器 GUI(它会重建 bridge 与 tunnel)。重连后带 token 请求变 200,CLI 侧即可脱离 Browser-only。
+- **纠错记录**:早先版本把"裸 curl 502"当成 GUI 会话掉线的证据(还附了'tunnel 在转发 `codex_exec` 但桥 502'的'实测印证')——那是把假阴性当真断。裸 curl 在任何健康状态都 502,它根本不能用来判断会话是否掉线;那条印证因此作废。
 
 **⑧ 连接器建好了,对话里还是 Browser-only:忘开 per-chat 开关**
 最常见、也最容易被当成"harness 没通"的坑:你在 ChatGPT Web 建了 `Codex Native2`、权限也 Allow all actions,但**新对话里没打开它的开关**。结果模型这一轮说"cannot access the local Codex computer / Prepare the local context with a tool-capable ChatGPT Web model first",而 tunnel 日志里**完全没有 `codex_exec`**——本地工具根本没被调用。
 - 解法:见步骤 5,在输入框附近/模型选择器里把 `Codex Native2` 开关切到**开**,再发指令。开关是**每个对话独立**的,换对话要重新开。
-- 区分:若 bridge 是 502,那是 GUI 会话掉线(坑 ⑦);若 bridge 是 200 却仍 Browser-only 且无 `codex_exec`,就是本坑(连接器没开)。两者现象相似,但根因不同。
+- 区分:若**带 token 的请求**仍 502,那是 GUI 会话掉线(坑 ⑦);裸 curl 的 502 不算。若带 token 返回 200(桥健康)却仍 Browser-only 且无 `codex_exec`,就是本坑(连接器没开)。两者现象相似,但根因不同。

@@ -26,8 +26,28 @@ pgrep -fa "Codex Web GPT.AppImage"
 # 2) bridge 端口通不通(应显示 REACHABLE)
 timeout 3 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/17841' && echo REACHABLE || echo DOWN
 
-# 2b) bridge 是否真正健康:必须返回 HTTP 200,502=GUI 内 ChatGPT 会话掉线(端口通也会 502,只看端口会误判)
-curl -s -o /dev/null -w "bridge HTTP %{http_code}\n" http://127.0.0.1:17841/v1/models
+# 2b) bridge 是否真正健康 —— ⚠ 裸 curl 永远返回 502,这是假阴性,不代表坏了!
+#     桥要求 Bearer 鉴权,未带 token 时返回:
+#       {"error":{"message":"Native Codex passthrough requires the incoming Bearer authorization",...}}
+#     所以下面的裸 curl 只会看到 502,绝不能据此判断 bridge 挂了。
+#
+# ❌ 错误判据(无论健康与否都 502):  curl .../v1/models
+#
+# ✅ 正确判据:带 Codex CLI 自己的 Bearer + client_version 才能看到真实状态。
+#    200 = bridge 健康(表面 surface 已挂载、passthrough 正常);只有带 token 仍 502 才可能是 GUI 会话掉线。
+python3 - <<'PY'
+import json, urllib.request, urllib.parse, os
+p = os.path.expanduser("~/.codex/auth.json")
+tok = json.load(open(p))["tokens"]["access_token"]
+q = urllib.parse.urlencode({"client_version": "0.147.0"})
+req = urllib.request.Request("http://127.0.0.1:17841/v1/models?" + q,
+    headers={"Authorization": "Bearer " + tok})
+try:
+    r = urllib.request.urlopen(req, timeout=8)
+    print("bridge HTTP", r.status, "-> 健康(surface 已挂载)")
+except urllib.error.HTTPError as e:
+    print("bridge HTTP", e.code, "->", e.read().decode()[:200])
+PY
 
 # 3) 代理端口通不通(应显示 REACHABLE)
 timeout 3 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/7897' && echo REACHABLE || echo DOWN
@@ -35,6 +55,13 @@ timeout 3 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/7897' && echo REACHABLE 
 # 4) 窗口是否在 X 上(xlsclients 应列出 codex-web-gpt-launcher)
 DISPLAY=:0 xlsclients
 ```
+
+> ⚠ **最大易错点(实测踩了很久)**:判断 bridge 死活**千万别用裸 `curl`**。
+> bridge 要求 Bearer 鉴权,任何不带 `Authorization: Bearer ...` 的请求都返回 **502**(body 是
+> `Native Codex passthrough requires the incoming Bearer authorization`)。所以 `/v1/models`
+> 看到 502 **绝不等于**"GUI 会话掉线 / surface 没挂"——它只是因为你没带 token。正确的健康判据是
+> 上面 `2b` 里带 Bearer + `client_version=0.147.0` 的请求,返回 **200** 才说明 bridge 真健康。
+> 一句话:**裸 curl 的 502 是假阴性,忽略它;看带 token 的 200。**
 
 ## Full harness 专属
 
@@ -57,7 +84,7 @@ DISPLAY=:0 xlsclients
 | 重启启动器后 bridge 起不来 / 端口 17841 被旧进程占着 | 只杀了 AppImage 包装名,真正的 `codex-web-gpt-launcher` 进程还活着 | 杀进程匹配 `codex-web-gpt-launcher`(在 `/tmp/appimage_extracted_*/` 下);必要时杀掉占用 17841 的孤儿 bun 进程再重启 |
 | 模型提示 "Prepare the local context with a tool-capable ChatGPT Web model first" / 仍 Browser-only 但 harness 健康 | surface 是会话级,需先准备;且**首条消息不能直接是评审请求**(模型在没工具时会回退 browser-only) | 彻底退出 CLI 开新会话;**首条消息发一个具体本地读取**(如读 README 前 30 行)建立 surface,成功后再发评审请求;会话内不要切模型 |
 | 给的路径找不到 / 模型说读不到 | 给的是相对路径,且相对的是 Codex 会话 cwd,或路径本就不对 | 用**绝对路径**最稳;确认会话启动目录(cwd),相对路径以 cwd 为基准 |
-| 启动器在跑、GUI 窗口也开着,但桥 17841 返回 **502**(端口通却上游断) | launcher 内部到 ChatGPT Web 的**已登录会话掉线**(登录过期 / 代理闪断 / 页面失连),bridge 代理拿不到上游。注意:tunnel 健康与否和这无关(走的是另一条路) | GUI 里**重新登录 ChatGPT Web**(cookie 有效可能自动重连);仍不行就重启启动器 GUI 让它重连。登录后 502→200,CLI 侧即可脱离 Browser-only。验证:`curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:17841/v1/models` 必须返回 200 |
+| 启动器在跑、GUI 窗口也开着,但桥 17841 对**带 Bearer 的**请求仍返回 **502**(端口通却上游断) | ⚠ 前提:必须是**带 `Authorization: Bearer ...` + `client_version` 的请求**才 502。裸 curl 的 502 是假阴性,见上方"最大易错点"框,不在此列。真实 502 的根因:launcher 内部到 ChatGPT Web 的**已登录会话掉线**(登录过期 / 代理闪断 / 页面失连),bridge 代理拿不到上游。注意:tunnel 健康与否和这无关(走的是另一条路) | GUI 里**重新登录 ChatGPT Web**(cookie 有效可能自动重连);仍不行就重启启动器 GUI 让它重连。登录后 502→200,CLI 侧即可脱离 Browser-only。正确验证:用 `2b` 带 token 的请求必须返回 200 |
 
 ## Windows / Linux(待验证,记录已知差异)
 
