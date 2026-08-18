@@ -41,6 +41,15 @@ DISPLAY=:0 xlsclients
 | 命令/补丁被拦截 | Permissions 别选 “Allow low-risk actions”,选 “Allow all actions” |
 | 旧的 `Codex Native` 连接器 | 不要重命名/刷新它,新建独立的 `Codex Native2` |
 
+## Full harness 会话内报错(实测)
+
+| 现象 | 根因 | 解法 |
+|------|------|------|
+| 模型说 "Browser-only mode",无法访问本地工作区 | bridge 在启动器启动时读了旧的 `browser` mode;或当前 Codex 会话是旧任务根,无法迁移 | ① 重启启动器 GUI(让 bridge 重读 `mode:"full"`);② 退出 Codex CLI 开**全新会话**,不要在同会话切模型 |
+| 读取被"运行环境的安全检查拦截 / 当前会话没有可用权限访问这个路径" | 连接器权限是 “Allow low-risk actions”,自动拦截本地读写 | ChatGPT Web 里把 `Codex Native2` 权限改为 **Allow all actions** |
+| 即使 Allow all actions,读 `~/.codex`、`~/.ssh` 等仍被拒 | 本地 Codex harness 沙箱保护工作区外敏感目录 | 用普通工作区文件路径验证(如项目目录下的文件),避开敏感路径 |
+| 重启启动器后 bridge 起不来 / 端口 17841 被旧进程占着 | 只杀了 AppImage 包装名,真正的 `codex-web-gpt-launcher` 进程还活着 | 杀进程匹配 `codex-web-gpt-launcher`(在 `/tmp/appimage_extracted_*/` 下);必要时杀掉占用 17841 的孤儿 bun 进程再重启 |
+
 ## Windows / Linux(待验证,记录已知差异)
 
 - **Linux 原生**:有 FUSE,AppImage 直接挂载即可,不需要 `APPIMAGE_EXTRACT_AND_RUN`;若用代理,加 `--proxy-server`(Chromium 同样不读 env 代理)。

@@ -34,7 +34,7 @@
    - **名称必须精确为 `Codex Native2`**(不要叫 `Codex Native`,也不要复用旧的);
    - 选择你刚创建的 tunnel;
    - **Authentication 设为 None**;
-   - **Permissions 选 Allow all actions**(选 “Allow low-risk actions” 会在到达 Codex harness 前拦截命令/补丁)。
+   - **Permissions 必须选 Allow all actions**(见下方"常见坑 ①",选 “Allow low-risk actions” 会导致本地读写被安全检查拦截)。
 
 ### 4. 验证
 回启动器点 **Verify runtime**。它会精确选择 `Codex Native2`;若只发现旧的 `Codex Native`,会显式失败并提示迁移,而不会接受旧连接器。
@@ -57,3 +57,24 @@
 | 名称不匹配 | 必须精确 `Codex Native2`(大小写/空格/数字 2) |
 | 命令被拦截 | Permissions 改为 Allow all actions |
 | 验证时 bridge 不可达 | 确认启动器 GUI 在运行、`127.0.0.1:17841` 可达 |
+
+## 常见坑(实测)
+
+**① 权限必须 Allow all actions,否则本地读写被"安全检查"拦截**
+连接器若设为 "Allow low-risk actions",模型发起的本地读取/写入会被直接拦截,报错类似:
+> 该读取操作被运行环境的安全检查拦截,当前会话没有可用权限访问这个路径。
+
+改成 **Allow all actions** 后即通过(外层 Codex harness 仍会强制沙箱与审批,不会真的乱来)。
+
+**② Connect harness 后必须重启启动器 GUI**
+bridge 在**启动器进程启动时**才读取一次 `mode`(browser/full),之后不热更新。若启动器已在运行时才点 "Connect harness",必须**退出并重启启动器 GUI**,否则 chatgpt-web 模型在 Codex 里仍报 Browser-only。
+> 注意:杀进程要匹配真实进程名 `codex-web-gpt-launcher`(位于 `/tmp/appimage_extracted_*/`),只杀 `Codex Web GPT.AppImage` 包装名杀不掉真正的 Electron 主进程。
+
+**③ Codex CLI 里"同会话切模型"不会重新生根**
+在已有会话里把模型从别的切成 `chatgpt-web/*`,任务根不变,仍可能是 Browser-only/V2。必须**退出 CLI、开一个全新会话**(`codex -m "chatgpt-web/pro"`),新任务才会是 full 模式。
+
+**④ 敏感路径可能被 harness 沙箱拦**
+即便权限是 Allow all actions,`~/.codex`、`~/.ssh` 等工作区之外的敏感目录仍可能被本地 Codex harness 沙箱拒绝。验证 harness 是否打通,优先用**普通工作区文件**(如项目目录下的文件、`/home/你/某普通文件`),避开敏感路径。
+
+**⑤ 验证 harness 是否真通的最小测试**
+新会话里让模型读一个普通文件,例如:`读取 /home/你/某项目/README.md 的前 20 行`。能读出来即 Full harness 生效。

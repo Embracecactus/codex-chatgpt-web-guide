@@ -143,7 +143,7 @@ codex-web-gpt
    - 名称**必须精确为 `Codex Native2`**;
    - 选择你创建的 tunnel;
    - Authentication 设为 **None**;
-   - Permissions 选 **Allow all actions**。
+   - Permissions 选 **Allow all actions**(选 “Allow low-risk actions” 会导致本地读写被安全检查拦截,见 `docs/full-harness.md` 常见坑 ①)。
    ![Codex Native2 连接器](images/05-codex-native2-connector.png)
 5. 回启动器点 **Verify runtime**。
 
