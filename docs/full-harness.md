@@ -78,3 +78,12 @@ bridge 在**启动器进程启动时**才读取一次 `mode`(browser/full),之�
 
 **⑤ 验证 harness 是否真通的最小测试**
 新会话里让模型读一个普通文件,例如:`读取 /home/你/某项目/README.md 的前 20 行`。能读出来即 Full harness 生效。
+
+**⑥ 即使 harness 健康,会话仍可能 Browser-only:需先"准备本地上下文"**
+若启动器/bridge/tunnel 都正常(`mode:"full"`),但模型仍报 Browser-only 并提示 *"Prepare the local context with a tool-capable ChatGPT Web model first, then switch back"*,这是**会话级**问题:surface(本地工具面)要先被准备,高阶档位默认不自带。
+- 必须**彻底退出 Codex CLI 再开全新会话**(同会话切模型不会重新生根,且会丢掉已建立的 surface);
+- 新会话的**第一条消息就做一次本地读取**(如读一个普通文件),把上下文填满工具结果,surface 即建立;
+- **会话内不要切换模型**:切到 `pro` / `pro ultra` 等高阶档位会丢失 surface,Pro 在上下文准备好之前就是 browser-only;
+- 验证:新会话首条读文件成功 = surface 已建立,之后即可评审本地代码。
+- **首条消息必须是"具体本地读取",不要直接发评审类请求**:若第一条就是"评审某某目录",模型在上下文未准备、尚不能用工具时会回退成 Browser-only 并提示准备上下文;应先发一条简单的"读取某文件前 N 行",等它真正读出来(surface 建立),再发评审请求。
+- **相对路径以 Codex 会话目录(cwd)为基准**:模型读 `a/b/c` 时解析为会话启动时的 cwd 下的 `a/b/c`。给绝对路径最稳妥(如 `/home/你/project/...`)。

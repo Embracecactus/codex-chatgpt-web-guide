@@ -49,6 +49,8 @@ DISPLAY=:0 xlsclients
 | 读取被"运行环境的安全检查拦截 / 当前会话没有可用权限访问这个路径" | 连接器权限是 “Allow low-risk actions”,自动拦截本地读写 | ChatGPT Web 里把 `Codex Native2` 权限改为 **Allow all actions** |
 | 即使 Allow all actions,读 `~/.codex`、`~/.ssh` 等仍被拒 | 本地 Codex harness 沙箱保护工作区外敏感目录 | 用普通工作区文件路径验证(如项目目录下的文件),避开敏感路径 |
 | 重启启动器后 bridge 起不来 / 端口 17841 被旧进程占着 | 只杀了 AppImage 包装名,真正的 `codex-web-gpt-launcher` 进程还活着 | 杀进程匹配 `codex-web-gpt-launcher`(在 `/tmp/appimage_extracted_*/` 下);必要时杀掉占用 17841 的孤儿 bun 进程再重启 |
+| 模型提示 "Prepare the local context with a tool-capable ChatGPT Web model first" / 仍 Browser-only 但 harness 健康 | surface 是会话级,需先准备;且**首条消息不能直接是评审请求**(模型在没工具时会回退 browser-only) | 彻底退出 CLI 开新会话;**首条消息发一个具体本地读取**(如读 README 前 30 行)建立 surface,成功后再发评审请求;会话内不要切模型 |
+| 给的路径找不到 / 模型说读不到 | 给的是相对路径,且相对的是 Codex 会话 cwd,或路径本就不对 | 用**绝对路径**最稳;确认会话启动目录(cwd),相对路径以 cwd 为基准 |
 
 ## Windows / Linux(待验证,记录已知差异)
 
