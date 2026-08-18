@@ -15,6 +15,7 @@
 | 冒烟测试报错 `ENOENT ... /tmp/appimage_extracted_.../codex-web-gpt-launcher` | AppImage 把启动器解压到 `/tmp`,若该目录被清理,smoke 找不到它 | 保持启动器进程常驻(别 `kill -9` 后清 `/tmp`);重新启动会复用/重建该目录。确保 `CODEX_WEB_GPT_APPIMAGE` 指向正确路径 |
 | 启动报 “SingletonLock” / 新实例起不来 | 上次 `kill -9` 残留锁文件 | 删 `~/.config/Codex Web GPT/` 下的 `SingletonLock`/`SingletonCookie`/`SingletonSocket` 后重试 |
 | 选了 `chatgpt-web/...` 模型但无响应 | 启动器 GUI 被关掉,bridge(17841)掉了 | 启动器 GUI **必须一直运行**;确认 `127.0.0.1:17841` 可达 |
+| bridge 17841 在 **200/502 之间反复横跳**,launcher 日志出现 `Network service crashed` / `GPU process exited unexpectedly` / `Render frame was disposed` | WSL2 上 launcher 内置的 Chromium(承载 ChatGPT Web 会话)子进程不稳,渲染帧被销毁导致会话掉线,进而 bridge 时通时断、Verify runtime 报 `browser-host` error / hard refresh 60s 超时 | 给启动器加 Chromium 稳定性参数:`--in-process-gpu --disable-gpu-sandbox --disable-dev-shm-usage`(已写入 `codex-web-gpt.sh` 与 `~/.local/bin/codex-web-gpt` 包装脚本);另外保持 GUI 窗口**可见、不要最小化/切到后台**,避免渲染进程被回收 |
 
 ## 快速自检命令(WSL2)
 
